@@ -23,6 +23,8 @@ const TUI_SESSION_STRIP_RE = new RegExp(`\\s*${TUI_SESSION_MODEL_FLAG}\\b\\s*`, 
 
 const stripTuiSessionFlag = (trimmed: string) => trimmed.replace(TUI_SESSION_STRIP_RE, ' ').replace(/\s+/g, ' ').trim()
 
+const modelSwitchLabel = (r: ConfigSetResponse) => (r.provider ? `${r.provider} · ${r.value}` : r.value)
+
 const modelValueForConfigSet = (arg: string) => {
   const trimmed = arg.trim()
 
@@ -61,6 +63,7 @@ export const sessionCommands: SlashCommand[] = [
   },
 
   {
+    aliases: ['models'],
     help: 'change or show model',
     name: 'model',
     run: (arg, ctx) => {
@@ -95,7 +98,7 @@ export const sessionCommands: SlashCommand[] = [
               return ctx.transcript.sys('error: invalid response: model switch')
             }
 
-            ctx.transcript.sys(`model → ${r.value}`)
+            ctx.transcript.sys(`model → ${modelSwitchLabel(r)}`)
             ctx.local.maybeWarn(r)
 
             patchUiState(state => ({

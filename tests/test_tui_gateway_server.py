@@ -3132,6 +3132,7 @@ def test_config_set_model_requires_confirmation_for_expensive_model(monkeypatch)
 
     assert confirmed["result"]["confirm_required"] is False
     assert confirmed["result"]["value"] == "openai/gpt-5.5-pro"
+    assert confirmed["result"]["provider"] == "openrouter"
     assert agent.switched is True
 
 
@@ -3180,6 +3181,7 @@ def test_config_set_model_global_persists(monkeypatch):
     )
 
     assert resp["result"]["value"] == "anthropic/claude-sonnet-4.6"
+    assert resp["result"]["provider"] == "anthropic"
     assert seen["is_global"] is True
     assert saved["model"]["default"] == "anthropic/claude-sonnet-4.6"
     assert saved["model"]["provider"] == "anthropic"
@@ -3225,6 +3227,7 @@ def test_config_set_model_explicit_provider_skips_broken_default_init(monkeypatc
         )
 
         assert resp["result"]["value"] == "claude-sonnet-4-6"
+        assert resp["result"]["provider"] == "anthropic"
         assert seen["build"] == 0
         assert seen["wait"] == 0
         assert seen["requested"] == [("anthropic", "claude-sonnet-4.6")]

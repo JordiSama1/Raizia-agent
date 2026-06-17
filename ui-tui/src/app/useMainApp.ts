@@ -86,6 +86,9 @@ export interface PromptLiveSessionOptions {
   sys: (text: string) => void
 }
 
+const modelSwitchLabel = (result: ConfigSetResponse) =>
+  result.provider ? `${result.provider} · ${result.value}` : result.value
+
 export async function startPromptLiveSession({
   dispatchSubmission,
   maybeWarn,
@@ -125,7 +128,7 @@ export async function startPromptLiveSession({
       return sid
     }
 
-    sys(`model → ${result.value}`)
+    sys(`model → ${modelSwitchLabel(result)}`)
     maybeWarn(result)
     onModelSwitched?.(result.value, result)
   }

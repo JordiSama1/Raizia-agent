@@ -115,6 +115,13 @@ describe('createSlashHandler', () => {
     })
   })
 
+  it('opens the model picker for /models alias', () => {
+    const ctx = buildCtx()
+
+    expect(createSlashHandler(ctx)('/models')).toBe(true)
+    expect(getOverlayState().modelPicker).toBe(true)
+  })
+
   it('honors TUI picker session scope without adding --global', async () => {
     patchUiState({ sid: 'sid-abc' })
 

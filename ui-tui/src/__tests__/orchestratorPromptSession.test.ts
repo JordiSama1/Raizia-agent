@@ -20,7 +20,7 @@ describe('startPromptLiveSession', () => {
       rpc: async (method, params) => {
         calls.push(['rpc', { method, params }])
 
-        return { value: 'kimi-k2.6', warning: '' }
+        return { provider: 'ollama-cloud', value: 'kimi-k2.6', warning: '' }
       },
       sys: text => calls.push(['sys', text])
     })
@@ -35,9 +35,9 @@ describe('startPromptLiveSession', () => {
           params: { key: 'model', session_id: 'abc123', value: 'kimi-k2.6 --provider ollama-cloud' }
         }
       ],
-      ['sys', 'model → kimi-k2.6'],
-      ['warn', { value: 'kimi-k2.6', warning: '' }],
-      ['model-switched', { result: { value: 'kimi-k2.6', warning: '' }, value: 'kimi-k2.6' }],
+      ['sys', 'model → ollama-cloud · kimi-k2.6'],
+      ['warn', { provider: 'ollama-cloud', value: 'kimi-k2.6', warning: '' }],
+      ['model-switched', { result: { provider: 'ollama-cloud', value: 'kimi-k2.6', warning: '' }, value: 'kimi-k2.6' }],
       ['dispatch', 'Build the thing']
     ])
   })

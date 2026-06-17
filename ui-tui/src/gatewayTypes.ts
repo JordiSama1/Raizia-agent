@@ -118,6 +118,7 @@ export interface ConfigSetResponse {
   credential_warning?: string
   history_reset?: boolean
   info?: SessionInfo
+  provider?: string
   value?: string
   warning?: string
 }

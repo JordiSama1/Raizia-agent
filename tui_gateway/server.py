@@ -2148,6 +2148,7 @@ def _apply_model_switch(
         if warning is not None:
             return {
                 "value": result.new_model,
+                "provider": result.target_provider,
                 "warning": warning.message,
                 "confirm_required": True,
                 "confirm_message": warning.message,
@@ -2194,6 +2195,7 @@ def _apply_model_switch(
         _persist_model_switch(result)
     return {
         "value": result.new_model,
+        "provider": result.target_provider,
         "warning": result.warning_message or "",
         "confirm_required": False,
     }
@@ -7233,6 +7235,7 @@ def _(rid, params: dict) -> dict:
                 {
                     "key": key,
                     "value": result["value"],
+                    "provider": result.get("provider", ""),
                     "warning": result["warning"],
                     "confirm_required": result.get("confirm_required", False),
                     "confirm_message": result.get("confirm_message", ""),

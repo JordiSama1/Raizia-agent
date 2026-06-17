@@ -20,6 +20,7 @@ type Stage = 'provider' | 'key' | 'model' | 'disconnect'
 export function ModelPicker({ allowPersistGlobal = true, gw, onCancel, onSelect, sessionId, t }: ModelPickerProps) {
   const [providers, setProviders] = useState<ModelOptionProvider[]>([])
   const [currentModel, setCurrentModel] = useState('')
+  const [currentProvider, setCurrentProvider] = useState('')
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [persistGlobal, setPersistGlobal] = useState(false)
@@ -54,6 +55,7 @@ export function ModelPicker({ allowPersistGlobal = true, gw, onCancel, onSelect,
         const next = r.providers ?? []
         setProviders(next)
         setCurrentModel(String(r.model ?? ''))
+        setCurrentProvider(String(r.provider ?? ''))
         setProviderIdx(
           Math.max(
             0,
@@ -511,7 +513,7 @@ export function ModelPicker({ allowPersistGlobal = true, gw, onCancel, onSelect,
         </Text>
 
         <Text color={t.color.muted} wrap="truncate-end">
-          Current: {currentModel || '(unknown)'}
+          Current: {currentProvider ? `${currentProvider} · ` : ''}{currentModel || '(unknown)'}
         </Text>
         <Text color={filter ? t.color.accent : t.color.muted} wrap="truncate-end">
           {filter ? `filter: ${filter}▎` : 'type to filter · ↑/↓ select'}
