@@ -132,6 +132,19 @@ class TestCompactBannerSkinIntegration:
 
         assert "upstream abc12345" in banner
 
+    def test_raizia_fast_startup_compact_banner_uses_raizia_version_label(self, monkeypatch, tmp_path):
+        set_active_skin("default")
+        raizia_home = tmp_path / ".raizia"
+        raizia_home.mkdir()
+        monkeypatch.setenv("HERMES_HOME", str(raizia_home))
+        monkeypatch.setenv("HERMES_FAST_STARTUP_BANNER", "1")
+
+        with patch("cli.shutil.get_terminal_size", return_value=SimpleNamespace(columns=90)):
+            banner = _build_compact_banner()
+
+        assert "Raizia Agent v" in banner
+        assert "Hermes Agent v" not in banner
+
 
 class TestAnsiRichTextHelper:
     def test_preserves_literal_brackets(self):

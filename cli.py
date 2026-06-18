@@ -3014,7 +3014,13 @@ def _build_compact_banner() -> str:
         from hermes_cli import __release_date__ as _release_date
         from hermes_cli import __version__ as _version
 
-        version_line = f"Hermes Agent v{_version} ({_release_date})"
+        try:
+            from hermes_constants import get_hermes_home
+
+            _agent_name = "Raizia Agent" if get_hermes_home().name == ".raizia" else "Hermes Agent"
+        except Exception:
+            _agent_name = "Hermes Agent"
+        version_line = f"{_agent_name} v{_version} ({_release_date})"
     else:
         version_line = format_banner_version_label()
 
