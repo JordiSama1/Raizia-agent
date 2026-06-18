@@ -59,6 +59,14 @@ def _mode(value: Any) -> str:
     return "scrape" if str(value or "").strip().lower() == "scrape" else "plan"
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def _custom_queries(value: Any) -> list[Any]:
     if not isinstance(value, list):
         return []
@@ -162,6 +170,16 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     max_per_query = _bounded_int(args.get("max_per_query"), 2, 1, 100)
     concurrency = _bounded_int(args.get("concurrency"), 4, 1, 8)
     custom_queries = _custom_queries(args.get("custom_queries"))
+    allow_templates = _truthy(args.get("allow_templates"))
+
+    if not custom_queries and not allow_templates:
+        return tool_error(
+            "custom_queries are required by default. Raizia must build a contextual "
+            "buyer strategy before running Prospecta; pass allow_templates=true only "
+            "for an explicit template fallback.",
+            strategy_required=True,
+            allowed_next_action="generate_custom_queries",
+        )
 
     payload = {
         "property": prop,
@@ -172,6 +190,8 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     }
     if custom_queries:
         payload["custom_queries"] = custom_queries
+    if allow_templates:
+        payload["allow_templates"] = True
 
     root = prospecta_root()
     tsx_bin = root / "node_modules" / ".bin" / "tsx"
@@ -227,11 +247,12 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
     "name": "prospecta_property_google_leads",
     "description": (
         "Plan or run a safe Prospecta Google Maps lead search for one real-estate "
-        "property. The agent should think through a contextual buyer strategy first "
-        "and pass custom_queries when the property has specific demand drivers; "
-        "built-in templates are only a fallback. Default mode is plan: it generates "
-        "ranked Google Maps query combinations without opening a browser. Scrape mode "
-        "runs Playwright with explicit caps and writes leads to Prospecta SQLite. "
+        "property. custom_queries are required by default: Raizia must think through "
+        "a contextual buyer strategy first and pass property-specific searches. "
+        "Built-in templates are only an explicit fallback when allow_templates=true. "
+        "Default mode is plan: it returns ranked Google Maps query combinations "
+        "without opening a browser. Scrape mode runs Playwright with explicit caps "
+        "and writes leads to Prospecta SQLite. "
         "This tool never sends WhatsApp, Chatwoot, LinkedIn, or outbound messages."
     ),
     "parameters": {
@@ -279,10 +300,10 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
                 "type": "array",
                 "description": (
                     "Agent-generated Google Maps searches for this exact property. "
-                    "Use this when reasoning finds contextual buyer segments such as "
+                    "Required by default. Use this when reasoning finds contextual buyer segments such as "
                     "tourism, salmoneras, logistics, local family companies, or other "
-                    "regional demand drivers. If omitted, Prospecta falls back to "
-                    "generic templates."
+                    "regional demand drivers. If omitted, the tool refuses to run unless "
+                    "allow_templates is explicitly true."
                 ),
                 "items": {
                     "anyOf": [
@@ -316,6 +337,15 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
                     ],
                 },
                 "maxItems": 50,
+            },
+            "allow_templates": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Explicit escape hatch for Prospecta's built-in generic templates. "
+                    "Leave false for Raizia product flows; set true only when the user "
+                    "asks for template fallback or a low-context smoke test."
+                ),
             },
         },
         "required": ["property"],

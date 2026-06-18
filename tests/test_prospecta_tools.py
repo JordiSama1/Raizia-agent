@@ -69,6 +69,7 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
         "mode": "plan",
         "max_queries": 10,
         "max_per_query": 2,
+        "allow_templates": True,
     }))
 
     assert result["ok"] is True
@@ -93,6 +94,24 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
     payload = json.loads(seen["input"])
     assert payload["property"]["city"] == "Vitacura"
     assert payload["mode"] == "plan"
+    assert payload["allow_templates"] is True
+
+
+def test_property_google_leads_requires_agent_strategy_before_templates(monkeypatch):
+    def fail_popen(*_args, **_kwargs):
+        raise AssertionError("Prospecta CLI should not run without custom_queries")
+
+    monkeypatch.setattr(prospecta_tools.subprocess, "Popen", fail_popen)
+
+    result = json.loads(prospecta_tools._run_property_google_leads({
+        "property": {"asset_type": "casa", "city": "Puerto Montt"},
+        "mode": "scrape",
+    }))
+
+    assert "error" in result
+    assert "custom_queries" in result["error"]
+    assert result["strategy_required"] is True
+    assert result["allowed_next_action"] == "generate_custom_queries"
 
 
 def test_property_google_leads_passes_concurrency_to_cli_and_payload(monkeypatch, tmp_path):
@@ -118,6 +137,7 @@ def test_property_google_leads_passes_concurrency_to_cli_and_payload(monkeypatch
         "max_queries": 4,
         "max_per_query": 10,
         "concurrency": 4,
+        "allow_templates": True,
     }))
 
     assert result["ok"] is True
@@ -176,8 +196,10 @@ def test_property_google_leads_schema_exposes_custom_queries_for_agent_strategy(
     props = schema["parameters"]["properties"]
 
     assert "custom_queries" in props
+    assert "allow_templates" in props
     assert props["custom_queries"]["type"] == "array"
-    assert "think" in schema["description"].lower()
+    assert props["allow_templates"]["type"] == "boolean"
+    assert "required by default" in schema["description"].lower()
     assert "template" in schema["description"].lower()
 
 
@@ -197,7 +219,10 @@ def test_property_google_leads_accepts_harness_metadata(monkeypatch, tmp_path):
 
     result = json.loads(prospecta_tools.registry.dispatch(
         "prospecta_property_google_leads",
-        {"property": {"asset_type": "casa", "city": "Vitacura"}},
+        {
+            "property": {"asset_type": "casa", "city": "Vitacura"},
+            "allow_templates": True,
+        },
         task_id="test-task",
         tool_call_id="call_123",
     ))
@@ -228,6 +253,7 @@ def test_property_google_leads_clamps_limits_and_scrape_mode(monkeypatch, tmp_pa
         "mode": "scrape",
         "max_queries": 999,
         "max_per_query": 999,
+        "allow_templates": True,
     }))
 
     assert result["mode"] == "scrape"
@@ -256,6 +282,7 @@ def test_property_google_leads_handles_non_json_stdout(monkeypatch, tmp_path):
 
     result = json.loads(prospecta_tools._run_property_google_leads({
         "property": {"asset_type": "casa", "city": "Vitacura"},
+        "allow_templates": True,
     }))
 
     assert "error" in result
@@ -293,6 +320,7 @@ def test_property_google_leads_timeout_terminates_process_group(monkeypatch, tmp
     result = json.loads(prospecta_tools._run_property_google_leads({
         "property": {"asset_type": "casa", "city": "Vitacura"},
         "mode": "scrape",
+        "allow_templates": True,
     }))
 
     assert "timed out" in result["error"]

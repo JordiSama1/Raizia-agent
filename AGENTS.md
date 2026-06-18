@@ -142,6 +142,17 @@ Expected Prospecta capabilities:
 - Lead scoring and curation.
 - Chatwoot handoff/sync.
 
+For property-to-leads workflows, use the in-repo skill:
+
+```text
+skills/productivity/prospecta-real-estate-ops/SKILL.md
+```
+
+That skill defines the operating split: Raizia builds the property-specific
+buyer strategy and classifies returned leads; Prospecta scrapers stay
+deterministic execution tools. Do not run generic templates unless the user
+explicitly asks for a fallback/smoke test.
+
 ## Upstream Merge Rules
 
 `apps/agent` should stay close to Hermes upstream so Raizia can receive fixes
