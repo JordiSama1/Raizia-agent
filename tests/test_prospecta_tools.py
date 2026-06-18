@@ -126,12 +126,59 @@ def test_property_google_leads_passes_concurrency_to_cli_and_payload(monkeypatch
     assert payload["concurrency"] == 4
 
 
+def test_property_google_leads_passes_custom_queries_to_payload(monkeypatch, tmp_path):
+    prospecta_root = tmp_path / "prospecta"
+    (prospecta_root / "tools").mkdir(parents=True)
+    (prospecta_root / "node_modules" / ".bin").mkdir(parents=True)
+    (prospecta_root / "package.json").write_text("{}", encoding="utf-8")
+    (prospecta_root / "tools" / "property-google-leads.ts").write_text("", encoding="utf-8")
+    (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
+    monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
+
+    seen = {}
+
+    install_fake_popen(
+        monkeypatch,
+        stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
+        seen=seen,
+    )
+
+    custom_queries = [
+        "hotel boutique Puerto Montt",
+        {
+            "query": "empresa salmonera Puerto Montt",
+            "tipo": "salmonera",
+            "family": "salmoneras",
+            "reason": "Comprador regional ligado al ecosistema acuicola",
+        },
+    ]
+    result = json.loads(prospecta_tools._run_property_google_leads({
+        "property": {"asset_type": "casa con terreno", "city": "Puerto Montt"},
+        "mode": "plan",
+        "custom_queries": custom_queries,
+    }))
+
+    assert result["ok"] is True
+    payload = json.loads(seen["input"])
+    assert payload["custom_queries"] == custom_queries
+
+
 def test_property_google_leads_schema_exposes_concurrency():
     props = prospecta_tools.PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA["parameters"]["properties"]
 
     assert props["concurrency"]["type"] == "integer"
     assert props["concurrency"]["default"] == 4
     assert props["concurrency"]["minimum"] == 1
+
+
+def test_property_google_leads_schema_exposes_custom_queries_for_agent_strategy():
+    schema = prospecta_tools.PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA
+    props = schema["parameters"]["properties"]
+
+    assert "custom_queries" in props
+    assert props["custom_queries"]["type"] == "array"
+    assert "think" in schema["description"].lower()
+    assert "template" in schema["description"].lower()
 
 
 def test_property_google_leads_accepts_harness_metadata(monkeypatch, tmp_path):

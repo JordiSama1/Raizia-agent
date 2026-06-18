@@ -59,6 +59,40 @@ def _mode(value: Any) -> str:
     return "scrape" if str(value or "").strip().lower() == "scrape" else "plan"
 
 
+def _custom_queries(value: Any) -> list[Any]:
+    if not isinstance(value, list):
+        return []
+
+    allowed_object_keys = {
+        "query",
+        "tipo",
+        "pitch",
+        "family",
+        "intent",
+        "score",
+        "reason",
+        "city",
+    }
+    queries: list[Any] = []
+    for item in value:
+        if isinstance(item, str):
+            query = item.strip()
+            if query:
+                queries.append(query)
+            continue
+
+        if not isinstance(item, dict):
+            continue
+        query = str(item.get("query") or "").strip()
+        if not query:
+            continue
+        cleaned = {key: item[key] for key in allowed_object_keys if key in item}
+        cleaned["query"] = query
+        queries.append(cleaned)
+
+    return queries[:50]
+
+
 def _terminate_process_tree(proc: subprocess.Popen) -> None:
     try:
         if os.name == "posix":
@@ -127,6 +161,7 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     max_queries = _bounded_int(args.get("max_queries"), 10, 1, 50)
     max_per_query = _bounded_int(args.get("max_per_query"), 2, 1, 100)
     concurrency = _bounded_int(args.get("concurrency"), 4, 1, 8)
+    custom_queries = _custom_queries(args.get("custom_queries"))
 
     payload = {
         "property": prop,
@@ -135,6 +170,8 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
         "max_per_query": max_per_query,
         "concurrency": concurrency,
     }
+    if custom_queries:
+        payload["custom_queries"] = custom_queries
 
     root = prospecta_root()
     tsx_bin = root / "node_modules" / ".bin" / "tsx"
@@ -190,10 +227,12 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
     "name": "prospecta_property_google_leads",
     "description": (
         "Plan or run a safe Prospecta Google Maps lead search for one real-estate "
-        "property. Default mode is plan: it generates ranked Google Maps query "
-        "combinations without opening a browser. Scrape mode runs Playwright with "
-        "explicit caps and writes leads to Prospecta SQLite. This tool never sends "
-        "WhatsApp, Chatwoot, LinkedIn, or outbound messages."
+        "property. The agent should think through a contextual buyer strategy first "
+        "and pass custom_queries when the property has specific demand drivers; "
+        "built-in templates are only a fallback. Default mode is plan: it generates "
+        "ranked Google Maps query combinations without opening a browser. Scrape mode "
+        "runs Playwright with explicit caps and writes leads to Prospecta SQLite. "
+        "This tool never sends WhatsApp, Chatwoot, LinkedIn, or outbound messages."
     ),
     "parameters": {
         "type": "object",
@@ -235,6 +274,48 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
                     "Parallel Google Maps target workers in scrape mode. Keep 3-4 "
                     "for stable runs; higher values increase CAPTCHA/bot-block risk."
                 ),
+            },
+            "custom_queries": {
+                "type": "array",
+                "description": (
+                    "Agent-generated Google Maps searches for this exact property. "
+                    "Use this when reasoning finds contextual buyer segments such as "
+                    "tourism, salmoneras, logistics, local family companies, or other "
+                    "regional demand drivers. If omitted, Prospecta falls back to "
+                    "generic templates."
+                ),
+                "items": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "tipo": {"type": "string"},
+                                "pitch": {"type": "string"},
+                                "family": {"type": "string"},
+                                "intent": {
+                                    "type": "string",
+                                    "enum": [
+                                        "buyer_candidate",
+                                        "channel_partner",
+                                        "service_provider",
+                                        "low_fit",
+                                    ],
+                                },
+                                "score": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 100,
+                                },
+                                "reason": {"type": "string"},
+                                "city": {"type": "string"},
+                            },
+                            "required": ["query"],
+                        },
+                    ],
+                },
+                "maxItems": 50,
             },
         },
         "required": ["property"],
