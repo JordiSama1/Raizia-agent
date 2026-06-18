@@ -155,6 +155,15 @@ TOOLSETS = {
         "tools": ["terminal", "process"],
         "includes": []
     },
+
+    "prospecta": {
+        "description": (
+            "Raizia real-estate Prospecta tools: plan property-specific Google "
+            "Maps lead queries and optionally run capped scraping into SQLite."
+        ),
+        "tools": ["prospecta_property_google_leads"],
+        "includes": []
+    },
     
     "moa": {
         "description": "Advanced reasoning and problem-solving tools",
