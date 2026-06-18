@@ -1,9 +1,50 @@
 from __future__ import annotations
 
 import json
+import signal
 import subprocess
 
 from tools import prospecta_tools
+
+
+def install_fake_popen(monkeypatch, *, stdout, stderr="", returncode=0, seen=None):
+    seen = seen if seen is not None else {}
+
+    class FakePopen:
+        pid = 12345
+
+        def __init__(self, cmd, **kwargs):
+            seen["cmd"] = cmd
+            seen["kwargs"] = kwargs
+            self.returncode = returncode
+
+        def communicate(self, input=None, timeout=None):
+            seen["input"] = input
+            seen["timeout"] = timeout
+            return stdout, stderr
+
+    monkeypatch.setattr(prospecta_tools.subprocess, "Popen", FakePopen)
+    return seen
+
+
+def test_terminate_process_tree_kills_process_group(monkeypatch):
+    calls = []
+
+    class FakeProcess:
+        pid = 12345
+
+        def wait(self, timeout=None):
+            calls.append(("wait", timeout))
+            if len([c for c in calls if c[0] == "wait"]) == 1:
+                raise subprocess.TimeoutExpired("fake", timeout)
+
+    monkeypatch.setattr(prospecta_tools.os, "name", "posix")
+    monkeypatch.setattr(prospecta_tools.os, "killpg", lambda pid, sig: calls.append(("killpg", pid, sig)))
+
+    prospecta_tools._terminate_process_tree(FakeProcess())
+
+    assert ("killpg", 12345, signal.SIGTERM) in calls
+    assert ("killpg", 12345, signal.SIGKILL) in calls
 
 
 def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
@@ -17,17 +58,11 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
 
     seen = {}
 
-    def fake_run(cmd, **kwargs):
-        seen["cmd"] = cmd
-        seen["kwargs"] = kwargs
-        return subprocess.CompletedProcess(
-            cmd,
-            0,
-            stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
-            stderr="",
-        )
-
-    monkeypatch.setattr(prospecta_tools.subprocess, "run", fake_run)
+    install_fake_popen(
+        monkeypatch,
+        stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
+        seen=seen,
+    )
 
     result = json.loads(prospecta_tools._run_property_google_leads({
         "property": {"asset_type": "casa", "city": "Vitacura"},
@@ -51,8 +86,9 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
         "-",
     ]
     assert seen["kwargs"]["cwd"] == prospecta_root
+    assert seen["kwargs"]["start_new_session"] is True
     assert "shell" not in seen["kwargs"]
-    payload = json.loads(seen["kwargs"]["input"])
+    payload = json.loads(seen["input"])
     assert payload["property"]["city"] == "Vitacura"
     assert payload["mode"] == "plan"
 
@@ -66,15 +102,9 @@ def test_property_google_leads_accepts_harness_metadata(monkeypatch, tmp_path):
     (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
     monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
 
-    monkeypatch.setattr(
-        prospecta_tools.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            cmd,
-            0,
-            stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
-            stderr="",
-        ),
+    install_fake_popen(
+        monkeypatch,
+        stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
     )
 
     result = json.loads(prospecta_tools.registry.dispatch(
@@ -98,17 +128,12 @@ def test_property_google_leads_clamps_limits_and_scrape_mode(monkeypatch, tmp_pa
 
     seen = {}
 
-    def fake_run(cmd, **kwargs):
-        seen["cmd"] = cmd
-        seen["kwargs"] = kwargs
-        return subprocess.CompletedProcess(
-            cmd,
-            0,
-            stdout=json.dumps({"ok": True, "mode": "scrape", "queries": []}),
-            stderr="scraper log",
-        )
-
-    monkeypatch.setattr(prospecta_tools.subprocess, "run", fake_run)
+    install_fake_popen(
+        monkeypatch,
+        stdout=json.dumps({"ok": True, "mode": "scrape", "queries": []}),
+        stderr="scraper log",
+        seen=seen,
+    )
 
     result = json.loads(prospecta_tools._run_property_google_leads({
         "property": {"asset_type": "casa", "city": "Vitacura"},
@@ -139,11 +164,7 @@ def test_property_google_leads_handles_non_json_stdout(monkeypatch, tmp_path):
     (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
     monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
 
-    monkeypatch.setattr(
-        prospecta_tools.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 0, stdout="not-json", stderr=""),
-    )
+    install_fake_popen(monkeypatch, stdout="not-json")
 
     result = json.loads(prospecta_tools._run_property_google_leads({
         "property": {"asset_type": "casa", "city": "Vitacura"},
@@ -151,6 +172,44 @@ def test_property_google_leads_handles_non_json_stdout(monkeypatch, tmp_path):
 
     assert "error" in result
     assert "non-JSON" in result["error"]
+
+
+def test_property_google_leads_timeout_terminates_process_group(monkeypatch, tmp_path):
+    prospecta_root = tmp_path / "prospecta"
+    (prospecta_root / "tools").mkdir(parents=True)
+    (prospecta_root / "node_modules" / ".bin").mkdir(parents=True)
+    (prospecta_root / "package.json").write_text("{}", encoding="utf-8")
+    (prospecta_root / "tools" / "property-google-leads.ts").write_text("", encoding="utf-8")
+    (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
+    monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
+
+    calls = []
+
+    class FakePopen:
+        pid = 54321
+        returncode = None
+
+        def __init__(self, cmd, **kwargs):
+            calls.append(("popen", kwargs.get("start_new_session")))
+
+        def communicate(self, input=None, timeout=None):
+            raise subprocess.TimeoutExpired("fake", timeout)
+
+        def wait(self, timeout=None):
+            calls.append(("wait", timeout))
+
+    monkeypatch.setattr(prospecta_tools.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(prospecta_tools.os, "name", "posix")
+    monkeypatch.setattr(prospecta_tools.os, "killpg", lambda pid, sig: calls.append(("killpg", pid, sig)))
+
+    result = json.loads(prospecta_tools._run_property_google_leads({
+        "property": {"asset_type": "casa", "city": "Vitacura"},
+        "mode": "scrape",
+    }))
+
+    assert "timed out" in result["error"]
+    assert ("popen", True) in calls
+    assert ("killpg", 54321, signal.SIGTERM) in calls
 
 
 def test_check_prospecta_requirements(monkeypatch, tmp_path):

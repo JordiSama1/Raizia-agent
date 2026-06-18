@@ -9,15 +9,22 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple
 
 from tools.registry import registry, tool_error, tool_result
 
 
 TOOLSET = "prospecta"
 DEFAULT_TIMEOUT_SECONDS = 900
+
+
+class CommandResult(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
 
 
 def _platform_root() -> Path:
@@ -50,6 +57,65 @@ def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
 
 def _mode(value: Any) -> str:
     return "scrape" if str(value or "").strip().lower() == "scrape" else "plan"
+
+
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    try:
+        if os.name == "posix":
+            os.killpg(proc.pid, signal.SIGTERM)
+        else:
+            proc.terminate()
+    except ProcessLookupError:
+        return
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            return
+
+    try:
+        proc.wait(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        if os.name == "posix":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except ProcessLookupError:
+        return
+    except Exception:
+        return
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        return
+
+
+def _run_json_command(cmd: list[str], root: Path, payload: Dict[str, Any]) -> CommandResult:
+    proc = subprocess.Popen(
+        cmd,
+        cwd=root,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=(os.name == "posix"),
+    )
+    try:
+        stdout, stderr = proc.communicate(
+            json.dumps(payload, ensure_ascii=False),
+            timeout=DEFAULT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        _terminate_process_tree(proc)
+        raise
+    except KeyboardInterrupt:
+        _terminate_process_tree(proc)
+        raise
+    return CommandResult(proc.returncode, stdout or "", stderr or "")
 
 
 def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
@@ -88,15 +154,7 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     ]
 
     try:
-        completed = subprocess.run(
-            cmd,
-            cwd=root,
-            input=json.dumps(payload, ensure_ascii=False),
-            text=True,
-            capture_output=True,
-            timeout=DEFAULT_TIMEOUT_SECONDS,
-            check=False,
-        )
+        completed = _run_json_command(cmd, root, payload)
     except FileNotFoundError as exc:
         return tool_error(f"Could not execute npm: {exc}")
     except subprocess.TimeoutExpired:
