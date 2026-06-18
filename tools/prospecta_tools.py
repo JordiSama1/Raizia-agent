@@ -126,12 +126,14 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     mode = _mode(args.get("mode"))
     max_queries = _bounded_int(args.get("max_queries"), 10, 1, 50)
     max_per_query = _bounded_int(args.get("max_per_query"), 2, 1, 100)
+    concurrency = _bounded_int(args.get("concurrency"), 4, 1, 8)
 
     payload = {
         "property": prop,
         "mode": mode,
         "max_queries": max_queries,
         "max_per_query": max_per_query,
+        "concurrency": concurrency,
     }
 
     root = prospecta_root()
@@ -149,6 +151,8 @@ def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
         str(max_queries),
         "--max-per-query",
         str(max_per_query),
+        "--concurrency",
+        str(concurrency),
         "--input",
         "-",
     ]
@@ -221,6 +225,16 @@ PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA = {
                 "minimum": 1,
                 "maximum": 100,
                 "description": "Google Maps result cap per query in scrape mode.",
+            },
+            "concurrency": {
+                "type": "integer",
+                "default": 4,
+                "minimum": 1,
+                "maximum": 8,
+                "description": (
+                    "Parallel Google Maps target workers in scrape mode. Keep 3-4 "
+                    "for stable runs; higher values increase CAPTCHA/bot-block risk."
+                ),
             },
         },
         "required": ["property"],

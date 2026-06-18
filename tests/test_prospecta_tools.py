@@ -82,6 +82,8 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
         "10",
         "--max-per-query",
         "2",
+        "--concurrency",
+        "4",
         "--input",
         "-",
     ]
@@ -91,6 +93,45 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
     payload = json.loads(seen["input"])
     assert payload["property"]["city"] == "Vitacura"
     assert payload["mode"] == "plan"
+
+
+def test_property_google_leads_passes_concurrency_to_cli_and_payload(monkeypatch, tmp_path):
+    prospecta_root = tmp_path / "prospecta"
+    (prospecta_root / "tools").mkdir(parents=True)
+    (prospecta_root / "node_modules" / ".bin").mkdir(parents=True)
+    (prospecta_root / "package.json").write_text("{}", encoding="utf-8")
+    (prospecta_root / "tools" / "property-google-leads.ts").write_text("", encoding="utf-8")
+    (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
+    monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
+
+    seen = {}
+
+    install_fake_popen(
+        monkeypatch,
+        stdout=json.dumps({"ok": True, "mode": "scrape", "queries": []}),
+        seen=seen,
+    )
+
+    result = json.loads(prospecta_tools._run_property_google_leads({
+        "property": {"asset_type": "casa", "city": "Puerto Montt"},
+        "mode": "scrape",
+        "max_queries": 4,
+        "max_per_query": 10,
+        "concurrency": 4,
+    }))
+
+    assert result["ok"] is True
+    assert seen["cmd"][seen["cmd"].index("--concurrency") + 1] == "4"
+    payload = json.loads(seen["input"])
+    assert payload["concurrency"] == 4
+
+
+def test_property_google_leads_schema_exposes_concurrency():
+    props = prospecta_tools.PROSPECTA_PROPERTY_GOOGLE_LEADS_SCHEMA["parameters"]["properties"]
+
+    assert props["concurrency"]["type"] == "integer"
+    assert props["concurrency"]["default"] == 4
+    assert props["concurrency"]["minimum"] == 1
 
 
 def test_property_google_leads_accepts_harness_metadata(monkeypatch, tmp_path):
