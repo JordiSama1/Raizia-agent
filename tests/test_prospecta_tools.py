@@ -57,6 +57,36 @@ def test_property_google_leads_builds_safe_npm_command(monkeypatch, tmp_path):
     assert payload["mode"] == "plan"
 
 
+def test_property_google_leads_accepts_harness_metadata(monkeypatch, tmp_path):
+    prospecta_root = tmp_path / "prospecta"
+    (prospecta_root / "tools").mkdir(parents=True)
+    (prospecta_root / "node_modules" / ".bin").mkdir(parents=True)
+    (prospecta_root / "package.json").write_text("{}", encoding="utf-8")
+    (prospecta_root / "tools" / "property-google-leads.ts").write_text("", encoding="utf-8")
+    (prospecta_root / "node_modules" / ".bin" / "tsx").write_text("", encoding="utf-8")
+    monkeypatch.setenv("RAIZIA_PROSPECTA_ROOT", str(prospecta_root))
+
+    monkeypatch.setattr(
+        prospecta_tools.subprocess,
+        "run",
+        lambda cmd, **kwargs: subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=json.dumps({"ok": True, "mode": "plan", "queries": []}),
+            stderr="",
+        ),
+    )
+
+    result = json.loads(prospecta_tools.registry.dispatch(
+        "prospecta_property_google_leads",
+        {"property": {"asset_type": "casa", "city": "Vitacura"}},
+        task_id="test-task",
+        tool_call_id="call_123",
+    ))
+
+    assert result["ok"] is True
+
+
 def test_property_google_leads_clamps_limits_and_scrape_mode(monkeypatch, tmp_path):
     prospecta_root = tmp_path / "prospecta"
     (prospecta_root / "tools").mkdir(parents=True)

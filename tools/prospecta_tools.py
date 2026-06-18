@@ -52,7 +52,7 @@ def _mode(value: Any) -> str:
     return "scrape" if str(value or "").strip().lower() == "scrape" else "plan"
 
 
-def _run_property_google_leads(args: Dict[str, Any]) -> str:
+def _run_property_google_leads(args: Dict[str, Any], **_metadata: Any) -> str:
     prop = args.get("property")
     if not isinstance(prop, dict):
         return tool_error("property object is required")
